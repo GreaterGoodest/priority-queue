@@ -105,6 +105,12 @@ message_t* peek_queue(message_queue_t *queue)
 
 uint8_t pop_queue(message_queue_t *queue, uint8_t *data)
 {
+    if (queue->last_element == 0)
+    {
+        puts("empty queue provided");
+        return -1;
+    }
+
     message_t *top_message = queue->messages[0]; 
 
     memcpy(data, top_message->data, top_message->data_size);
@@ -113,21 +119,54 @@ uint8_t pop_queue(message_queue_t *queue, uint8_t *data)
     queue->last_element -= 1;
     message_t *last_message = queue->messages[queue->last_element];
     queue->messages[0] = last_message;
+    queue->messages[queue->last_element] = NULL;
+
 
     /*bubble down to appropriate position*/
     size_t curr_index = 0;
     size_t left_child_i = 1;
     size_t right_child_i = 2;
+    if(!queue->messages[left_child_i] && !queue->messages[right_child_i])
+    {
+        return 0;
+    }
+
     while (
-        queue->messages[curr_index] > queue->messages[left_child_i] ||
-        queue->messages[curr_index] > queue->messages[right_child_i]
+        queue->messages[left_child_i] && queue->messages[curr_index]->priority > queue->messages[left_child_i]->priority ||
+        queue->messages[right_child_i] && queue->messages[curr_index]->priority > queue->messages[right_child_i]->priority
         )
     {
+        if(!queue->messages[left_child_i] && !queue->messages[right_child_i])
+        {
+            break;
+        }
+
+        /*check if left child or right child is smaller, swap with smaller one
+          also swap if with left child if no right child present */ 
+        if(!queue->messages[right_child_i] || queue->messages[left_child_i] && queue->messages[left_child_i]->priority < queue->messages[right_child_i]->priority)
+        {
+            message_t *curr_message = queue->messages[curr_index];
+
+            /* swap left child and parent */
+            queue->messages[curr_index] = queue->messages[left_child_i];
+            queue->messages[left_child_i] = curr_message;
+
+            curr_index = left_child_i;
+        }else{ /*otherwise, the right child must exist and be less*/
+            message_t *curr_message = queue->messages[curr_index];
+
+            /* swap right child and parent */
+            queue->messages[curr_index] = queue->messages[right_child_i];
+            queue->messages[right_child_i] = curr_message;
+
+            curr_index = right_child_i;
+        }
+
         left_child_i = curr_index * 2 + 1;
         right_child_i = curr_index * 2 + 2;
     }
 
-    queue->messages[queue->last_element] = NULL;
+    return 0;
 }
 
 int main()
@@ -136,13 +175,16 @@ int main()
 
     message_queue_t *message_queue = create_queue(100);
 
-    retval = add_message(message_queue,0,1,1,0,5,"hello");
+    retval = add_message(message_queue,0,1,1,0,5,"one");
     if (retval != 0)
     {
         puts("Failed to add message");
         return 1;
     }
-    retval = add_message(message_queue,0,1,0,0,4,"test");
+    retval = add_message(message_queue,0,1,3,0,4,"three");
+    retval = add_message(message_queue,0,1,2,0,4,"two");
+    retval = add_message(message_queue,0,1,2,0,4,"two");
+    retval = add_message(message_queue,0,1,0,0,4,"zero");
     
     puts("Priority check:");
     printf("data: %s, priority %d\n", message_queue->messages[0]->data, message_queue->messages[0]->priority);
@@ -155,7 +197,8 @@ int main()
     puts("Pop test:");
     char data[1024] = {0};
     pop_queue(message_queue, data);
-    printf("data: %s\n", data);
+    printf("popped data: %s\n", data);
+    printf("new top data: %s\n", message_queue->messages[0]->data);
 
     free_queue(message_queue);
 }
